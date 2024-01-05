@@ -362,12 +362,15 @@ func (p *Pagination) toValues() url.Values {
 func (p *Pagination) setValues(params url.Values) url.Values {
 	if p.MaxID != "" {
 		params.Set("max_id", string(p.MaxID))
+		return params
 	}
 	if p.SinceID != "" {
 		params.Set("since_id", string(p.SinceID))
+		return params
 	}
 	if p.MinID != "" {
 		params.Set("min_id", string(p.MinID))
+		return params
 	}
 	if p.Limit > 0 {
 		params.Set("limit", fmt.Sprint(p.Limit))
