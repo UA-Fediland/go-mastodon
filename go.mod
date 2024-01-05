@@ -1,4 +1,4 @@
-module github.com/mattn/go-mastodon
+module github.com/UA-Fediland/go-mastodon
 
 go 1.16
 
