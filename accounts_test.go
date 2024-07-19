@@ -38,6 +38,40 @@ func TestGetAccount(t *testing.T) {
 	}
 }
 
+func TestAccountLookup(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/accounts/lookup" {
+			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+			return
+		}
+		acct := r.URL.Query().Get("acct")
+		if acct != "foo@bar" {
+			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+			return
+		}
+		fmt.Fprintln(w, `{"username": "foo@bar"}`)
+	}))
+	defer ts.Close()
+
+	client := NewClient(&Config{
+		Server:       ts.URL,
+		ClientID:     "foo",
+		ClientSecret: "bar",
+		AccessToken:  "zoo",
+	})
+	_, err := client.AccountLookup(context.Background(), "123")
+	if err == nil {
+		t.Fatalf("should be fail: %v", err)
+	}
+	a, err := client.AccountLookup(context.Background(), "foo@bar")
+	if err != nil {
+		t.Fatalf("should not be fail: %v", err)
+	}
+	if a.Username != "foo@bar" {
+		t.Fatalf("want %q but %q", "foo@bar", a.Username)
+	}
+}
+
 func TestGetAccountCurrentUser(t *testing.T) {
 	canErr := true
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -284,6 +318,93 @@ func TestGetBlocks(t *testing.T) {
 	}
 	if bl[1].Username != "bar" {
 		t.Fatalf("want %q but %q", "bar", bl[1].Username)
+	}
+}
+
+func TestGetEndorsements(t *testing.T) {
+	canErr := true
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if canErr {
+			canErr = false
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+		fmt.Fprintln(w, `[
+  {
+    "id": "952529",
+    "username": "foo",
+    "acct": "alayna@desvox.es",
+    "display_name": "Alayna Desirae",
+    "locked": true,
+    "bot": false,
+    "created_at": "2019-10-26T23:12:06.570Z",
+    "note": "experiencing ________ difficulties<br>22y/o INFP in Oklahoma",
+    "url": "https://desvox.es/users/alayna",
+    "avatar": "https://files.mastodon.social/accounts/avatars/000/952/529/original/6534122046d050d5.png",
+    "avatar_static": "https://files.mastodon.social/accounts/avatars/000/952/529/original/6534122046d050d5.png",
+    "header": "https://files.mastodon.social/accounts/headers/000/952/529/original/496f1f817e042ade.png",
+    "header_static": "https://files.mastodon.social/accounts/headers/000/952/529/original/496f1f817e042ade.png",
+    "followers_count": 0,
+    "following_count": 0,
+    "statuses_count": 955,
+    "last_status_at": "2019-11-23T07:05:50.682Z",
+    "emojis": [],
+    "fields": []
+  },
+  {
+    "id": "832844",
+    "username": "bar",
+    "acct": "a9@broadcast.wolfgirl.engineering",
+    "display_name": "vivienne :collar: ",
+    "locked": true,
+    "bot": false,
+    "created_at": "2019-06-12T18:55:12.053Z",
+    "note": "borderline nsfw, considered a schedule I drug by nixon<br>waiting for the year of the illumos desktop",
+    "url": "https://broadcast.wolfgirl.engineering/users/a9",
+    "avatar": "https://files.mastodon.social/accounts/avatars/000/832/844/original/ae1de0b8fb63d1c6.png",
+    "avatar_static": "https://files.mastodon.social/accounts/avatars/000/832/844/original/ae1de0b8fb63d1c6.png",
+    "header": "https://files.mastodon.social/accounts/headers/000/832/844/original/5088e4a16e6d8736.png",
+    "header_static": "https://files.mastodon.social/accounts/headers/000/832/844/original/5088e4a16e6d8736.png",
+    "followers_count": 43,
+    "following_count": 67,
+    "statuses_count": 5906,
+    "last_status_at": "2019-11-23T05:23:47.911Z",
+    "emojis": [
+      {
+        "shortcode": "collar",
+        "url": "https://files.mastodon.social/custom_emojis/images/000/106/920/original/80953b9cd96ec4dc.png",
+        "static_url": "https://files.mastodon.social/custom_emojis/images/000/106/920/static/80953b9cd96ec4dc.png",
+        "visible_in_picker": true
+      }
+    ],
+    "fields": []
+  }
+]`)
+	}))
+	defer ts.Close()
+
+	client := NewClient(&Config{
+		Server:       ts.URL,
+		ClientID:     "foo",
+		ClientSecret: "bar",
+		AccessToken:  "zoo",
+	})
+	_, err := client.GetEndorsements(context.Background(), nil)
+	if err == nil {
+		t.Fatalf("should be fail: %v", err)
+	}
+	endorsements, err := client.GetEndorsements(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("should not be fail: %v", err)
+	}
+	if len(endorsements) != 2 {
+		t.Fatalf("result should be two: %d", len(endorsements))
+	}
+	if endorsements[0].Username != "foo" {
+		t.Fatalf("want %q but %q", "foo", endorsements[0].Username)
+	}
+	if endorsements[1].Username != "bar" {
+		t.Fatalf("want %q but %q", "bar", endorsements[1].Username)
 	}
 }
 
@@ -695,5 +816,95 @@ func TestGetMutes(t *testing.T) {
 	}
 	if mutes[1].Username != "bar" {
 		t.Fatalf("want %q but %q", "bar", mutes[1].Username)
+	}
+}
+func TestGetFollowedTags(t *testing.T) {
+	t.Parallel()
+	canErr := true
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if canErr {
+			canErr = false
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+		fmt.Fprintln(w, `[
+  {
+    "name": "Test1",
+    "url": "http://mastodon.example/tags/test1",
+    "history": [
+      {
+        "day": "1668211200",
+        "accounts": "0",
+        "uses": "0"
+      },
+      {
+        "day": "1668124800",
+        "accounts": "0",
+        "uses": "0"
+      },
+      {
+        "day": "1668038400",
+        "accounts": "0",
+        "uses": "0"
+      }
+    ],
+    "following": true
+  },
+  {
+    "name": "Test2",
+    "url": "http://mastodon.example/tags/test2",
+    "history": [
+      {
+        "day": "1668211200",
+        "accounts": "0",
+        "uses": "0"
+      }
+    ],
+    "following": true
+  }
+]`)
+	}))
+	defer ts.Close()
+
+	client := NewClient(&Config{
+		Server:       ts.URL,
+		ClientID:     "foo",
+		ClientSecret: "bar",
+		AccessToken:  "zoo",
+	})
+	_, err := client.GetFollowedTags(context.Background(), nil)
+	if err == nil {
+		t.Fatalf("should be fail: %v", err)
+	}
+	followedTags, err := client.GetFollowedTags(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("should not be fail: %v", err)
+	}
+	if len(followedTags) != 2 {
+		t.Fatalf("result should be two: %d", len(followedTags))
+	}
+	if followedTags[0].Name != "Test1" {
+		t.Fatalf("want %q but %q", "Test1", followedTags[0].Name)
+	}
+	if followedTags[0].URL != "http://mastodon.example/tags/test1" {
+		t.Fatalf("want %q but got %q", "http://mastodon.example/tags/test1", followedTags[0].URL)
+	}
+	if !followedTags[0].Following {
+		t.Fatalf("want following, but got false")
+	}
+	if 3 != len(followedTags[0].History) {
+		t.Fatalf("expecting first tag history length to be %d but got %d", 3, len(followedTags[0].History))
+	}
+	if followedTags[1].Name != "Test2" {
+		t.Fatalf("want %q but %q", "Test2", followedTags[1].Name)
+	}
+	if followedTags[1].URL != "http://mastodon.example/tags/test2" {
+		t.Fatalf("want %q but got %q", "http://mastodon.example/tags/test2", followedTags[1].URL)
+	}
+	if !followedTags[1].Following {
+		t.Fatalf("want following, but got false")
+	}
+	if 1 != len(followedTags[1].History) {
+		t.Fatalf("expecting first tag history length to be %d but got %d", 1, len(followedTags[1].History))
 	}
 }
